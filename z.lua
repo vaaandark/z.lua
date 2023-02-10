@@ -1954,6 +1954,12 @@ function main(argv)
 					path = os.path.norm(path)
 				end
 			end
+      if path == nil then
+        local prefix = table.pack(table.unpack(args, 1, #args - 1))
+        local last = args[#args]
+        path = z_cd(prefix)..os.path.sep..last
+        path = os.path.isdir(path) and path or nil
+      end
 		end
 		if path ~= nil then
 			io.write(path .. (options['-e'] and "\n" or ""))
