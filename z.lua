@@ -70,7 +70,7 @@
 --
 -- Configure (optional):
 --   set $_ZL_CMD in .bashrc/.zshrc to change the command (default z).
---   set $_ZL_DATA in .bashrc/.zshrc to change the datafile (default ~/.zlua).
+--   set $_ZL_DATA in .bashrc/.zshrc to change the datafile (default ~/.zlua.bin).
 --   set $_ZL_NO_PROMPT_COMMAND if you're handling PROMPT_COMMAND yourself.
 --   set $_ZL_EXCLUDE_DIRS to a comma separated list of dirs to exclude.
 --   set $_ZL_ADD_ONCE to 1 to update database only if $PWD changed.
@@ -116,7 +116,7 @@ os.path.sep = windows and '\\' or '/'
 -- Global Variable
 -----------------------------------------------------------------------
 MAX_AGE = 5000
-DATA_FILE = '~/.zlua'
+DATA_FILE = '~/.zlua.bin'
 PRINT_MODE = '<stdout>'
 PWD = ''
 Z_METHOD = 'frecent'
@@ -1068,30 +1068,22 @@ function data_load(filename)
 	local M = {}
 	local N = {}
 	local insensitive = path_case_insensitive()
-	local fp = io.open(os.path.expand(filename), 'r')
+	local fp = io.open(os.path.expand(filename), 'rb')
 	if fp == nil then
 		return {}
 	end
-	for line in fp:lines() do
-		local part = string.split(line, '|')
-		local item = {}
-		if part and part[1] and part[2] and part[3] then
-			local key = insensitive and part[1]:lower() or part[1]
-			part[2] = part[2]:gsub(",", ".")
-			item.name = part[1]
-			item.rank = tonumber(part[2])
-			item.time = tonumber(part[3]) + 0
-			item.frecent = item.rank
-			if string.len(part[3]) < 12 then
-				if item.rank ~= nil and item.time ~= nil then
-					if N[key] == nil then
-						table.insert(M, item)
-						N[key] = 1
-					end
-				end
-			end
-		end
-	end
+  local contents = fp:read("a")
+  local now
+  while not now or now < #contents do
+    local item = {}
+    item.name, item.rank, item.time, now = string.unpack("=zI4I8", contents, now)
+    local key = insensitive and item.name:lower() or item.name
+    item.frecent = item.rank
+    if N[key] == nil then
+      table.insert(M, item)
+      N[key] = 1
+    end
+  end
 	fp:close()
 	return M
 end
@@ -1122,21 +1114,20 @@ function data_save(filename, M)
 	end
 	if windows then
 		if os.native and os.native.ReplaceFile then
-			fp = io.open(tmpname, 'w')
+			fp = io.open(tmpname, 'wb')
 		else
-			fp = io.open(filename, 'w')
+			fp = io.open(filename, 'wb')
 			tmpname = nil
 		end
 	else
-		fp = io.open(tmpname, 'w')
+		fp = io.open(tmpname, 'wb')
 	end
 	if fp == nil then
 		return false
 	end
 	for i = 1, #M do
 		local item = M[i]
-		local text = item.name .. '|' .. item.rank .. '|' .. item.time
-		fp:write(text .. '\n')
+    fp:write(string.pack("=zI4I8", item.name, item.rank, item.time))
 	end
 	fp:close()
 	if tmpname ~= nil then
